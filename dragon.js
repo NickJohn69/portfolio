@@ -7,7 +7,11 @@ class DragonCursor {
   constructor() {
     // Detect if running on a mobile device (viewport width <= 768px)
     this.isMobile = window.matchMedia('(max-width: 768px)').matches;
-    // For mobile, we still create the canvas but use autonomous movement
+    if (this.isMobile) {
+      // Disable dragon on mobile devices
+      this.enabled = false;
+      return;
+    }
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'dragon-canvas';
     this.canvas.style.position = 'fixed';
@@ -23,8 +27,10 @@ class DragonCursor {
     this.ctx = this.canvas.getContext('2d');
 
     // Core parameters
-    this.numSegments = 30; // Slightly longer for complex details
-    this.segmentLength = 11;
+    if (!this.isMobile) {
+      this.numSegments = 30; // Slightly longer for complex details
+      this.segmentLength = 11;
+    }
     this.segments = [];
     this.particles = [];
 
