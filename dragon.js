@@ -5,6 +5,9 @@
 
 class DragonCursor {
   constructor() {
+    // Detect if running on a mobile device (viewport width <= 768px)
+    this.isMobile = window.matchMedia('(max-width: 768px)').matches;
+    // For mobile, we still create the canvas but use autonomous movement
     this.canvas = document.createElement('canvas');
     this.canvas.id = 'dragon-canvas';
     this.canvas.style.position = 'fixed';
@@ -24,6 +27,11 @@ class DragonCursor {
     this.segmentLength = 11;
     this.segments = [];
     this.particles = [];
+
+    // Mobile autonomous target
+    this.mobileTarget = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    // Mobile movement timer (change direction every 4-6 seconds)
+    this.mobileTimer = null;
 
     // Mouse tracking
     this.mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -62,43 +70,72 @@ class DragonCursor {
   }
 
   initEvents() {
-    window.addEventListener('mousemove', (e) => {
-      this.target.x = e.clientX;
-      this.target.y = e.clientY;
-    });
+    // Desktop mouse tracking
+    if (!this.isMobile) {
+      window.addEventListener('mousemove', (e) => {
+        this.target.x = e.clientX;
+        this.target.y = e.clientY;
+      });
 
-    window.addEventListener('touchmove', (e) => {
-      if (e.touches && e.touches[0]) {
-        this.target.x = e.touches[0].clientX;
-        this.target.y = e.touches[0].clientY;
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchstart', (e) => {
-      if (e.touches && e.touches[0]) {
-        this.target.x = e.touches[0].clientX;
-        this.target.y = e.touches[0].clientY;
-        this.mouse.x = this.target.x;
-        this.mouse.y = this.target.y;
-        for (let i = 0; i < this.numSegments; i++) {
-          this.segments[i].x = this.target.x;
-          this.segments[i].y = this.target.y;
+      window.addEventListener('touchmove', (e) => {
+        if (e.touches && e.touches[0]) {
+          this.target.x = e.touches[0].clientX;
+          this.target.y = e.touches[0].clientY;
         }
-      }
-    }, { passive: true });
+      }, { passive: true });
 
-    // Send the dragon behind text/buttons and lower its opacity when hovering over interactive elements
-    document.addEventListener('mouseover', (e) => {
-      if (!e.target) return;
-      const isInteractive = e.target.closest('a, button, input, textarea, [role="button"], .project-card, .btn');
-      if (isInteractive) {
-        this.canvas.style.zIndex = '5'; // Below content wrappers (z-index: 10)
-        this.canvas.style.opacity = '0.2'; // Drop opacity
-      } else {
-        this.canvas.style.zIndex = '99999'; // Default top layer
-        this.canvas.style.opacity = '1.0'; // Full opacity
-      }
-    });
+      window.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches[0]) {
+          this.target.x = e.touches[0].clientX;
+          this.target.y = e.touches[0].clientY;
+          this.mouse.x = this.target.x;
+          this.mouse.y = this.target.y;
+          for (let i = 0; i < this.numSegments; i++) {
+            this.segments[i].x = this.target.x;
+            this.segments[i].y = this.target.y;
+          }
+        }
+      }, { passive: true });
+    }
+
+    // Mobile autonomous movement timer
+    if (this.isMobile) {
+      const changeDirection = () => {
+        this.mobileTarget.x = Math.random() * window.innerWidth;
+        this.mobileTarget.y = Math.random() * window.innerHeight;
+        // schedule next change between 4-6 seconds
+        const next = 4000 + Math.random() * 2000;
+        this.mobileTimer = setTimeout(changeDirection, next);
+      };
+      changeDirection();
+      // Keep canvas behind text on mobile
+      this.canvas.style.zIndex = '5';
+    }
+
+    // Send the dragon behind text/buttons and lower its opacity when hovering over interactive elements (desktop only)
+    if (!this.isMobile) {
+      document.addEventListener('mouseover', (e) => {
+        if (!e.target) return;
+        const isInteractive = e.target.closest('a, button, input, textarea, [role="button"], .project-card, .btn');
+        if (isInteractive) {
+          this.canvas.style.zIndex = '5'; // Below content wrappers (z-index: 10)
+          this.canvas.style.opacity = '0.2'; // Drop opacity
+        } else {
+          this.canvas.style.zIndex = '99999'; // Default top layer
+          this.canvas.style.opacity = '1.0'; // Full opacity
+        }
+      });
+    }
+
+    // Hide dragon when mouse leaves the window (desktop only)
+    if (!this.isMobile) {
+      window.addEventListener('mouseleave', () => {
+        this.canvas.style.opacity = '0';
+      });
+      window.addEventListener('mouseenter', () => {
+        this.canvas.style.opacity = '1.0';
+      });
+    }
 
     window.addEventListener('resize', () => this.resizeCanvas());
   }
@@ -144,6 +181,12 @@ class DragonCursor {
 
   updatePhysics() {
     this.time += 0.028;
+
+    // For mobile, use autonomous target
+    if (this.isMobile) {
+      this.target.x = this.mobileTarget.x;
+      this.target.y = this.mobileTarget.y;
+    }
 
     // Head physics
     this.velocity.x = this.target.x - this.mouse.x;
