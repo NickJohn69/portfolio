@@ -21,7 +21,8 @@ class DragonCursor {
     this.canvas.style.height = '100vh';
     this.canvas.style.pointerEvents = 'none';
     this.canvas.style.zIndex = '99999'; // Float above webpage content
-    this.canvas.style.transition = 'opacity 0.35s ease'; // Smooth fading
+    this.canvas.style.opacity = '0'; // Start invisible until mouse enters page
+    this.canvas.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1)'; // Smooth premium fading
     document.body.appendChild(this.canvas);
 
     this.ctx = this.canvas.getContext('2d');
@@ -33,6 +34,9 @@ class DragonCursor {
     }
     this.segments = [];
     this.particles = [];
+
+    // State tracking
+    this.isOutside = true; // Track if cursor is outside viewport
 
     // Mobile autonomous target
     this.mobileTarget = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -75,31 +79,90 @@ class DragonCursor {
     return Math.max(1.8, 6.5 * (1 - (index - 22) / (this.numSegments - 22))); // Whip tail spine
   }
 
+  updateInteractiveState(targetElement) {
+    if (this.isOutside) {
+      this.canvas.style.opacity = '0';
+      return;
+    }
+    if (!targetElement) return;
+
+    const isInteractive = targetElement.closest && targetElement.closest('a, button, input, textarea, [role="button"], .project-card, .btn');
+    if (isInteractive) {
+      this.canvas.style.zIndex = '5'; // Below content wrappers (z-index: 10)
+      this.canvas.style.opacity = '0.2'; // Drop opacity over interactive elements
+    } else {
+      this.canvas.style.zIndex = '99999'; // Default top layer
+      this.canvas.style.opacity = '1.0'; // Full opacity
+    }
+  }
+
   initEvents() {
-    // Desktop mouse tracking
+    // Desktop mouse tracking & boundary handling
     if (!this.isMobile) {
-      window.addEventListener('mousemove', (e) => {
-        this.target.x = e.clientX;
-        this.target.y = e.clientY;
+      const handlePointerLeave = () => {
+        this.isOutside = true;
+        this.canvas.style.opacity = '0';
+      };
+
+      const handlePointerMove = (e) => {
+        const x = e.clientX;
+        const y = e.clientY;
+
+        if (this.isOutside) {
+          this.isOutside = false;
+
+          // Instantly snap target, head, and all body segments to entry cursor location
+          this.target.x = x;
+          this.target.y = y;
+          this.mouse.x = x;
+          this.mouse.y = y;
+          this.velocity.x = 0;
+          this.velocity.y = 0;
+
+          for (let i = 0; i < this.numSegments; i++) {
+            this.segments[i].x = x;
+            this.segments[i].y = y;
+            this.segments[i].angle = 0;
+          }
+
+          // Clear stray particles from previous location
+          this.particles = [];
+        } else {
+          this.target.x = x;
+          this.target.y = y;
+        }
+
+        this.updateInteractiveState(e.target);
+      };
+
+      window.addEventListener('mousemove', handlePointerMove);
+      window.addEventListener('mouseenter', handlePointerMove);
+
+      // Multi-layer leave listeners for robust viewport exit detection
+      window.addEventListener('mouseleave', handlePointerLeave);
+      document.addEventListener('mouseleave', handlePointerLeave);
+      document.addEventListener('mouseout', (e) => {
+        if (!e.relatedTarget && !e.toElement) {
+          handlePointerLeave();
+        }
+      });
+
+      // Hover handling over interactive elements
+      document.addEventListener('mouseover', (e) => {
+        if (this.isOutside) return;
+        this.updateInteractiveState(e.target);
       });
 
       window.addEventListener('touchmove', (e) => {
         if (e.touches && e.touches[0]) {
-          this.target.x = e.touches[0].clientX;
-          this.target.y = e.touches[0].clientY;
+          handlePointerMove(e.touches[0]);
         }
       }, { passive: true });
 
       window.addEventListener('touchstart', (e) => {
         if (e.touches && e.touches[0]) {
-          this.target.x = e.touches[0].clientX;
-          this.target.y = e.touches[0].clientY;
-          this.mouse.x = this.target.x;
-          this.mouse.y = this.target.y;
-          for (let i = 0; i < this.numSegments; i++) {
-            this.segments[i].x = this.target.x;
-            this.segments[i].y = this.target.y;
-          }
+          this.isOutside = true; // force snap on new touch location
+          handlePointerMove(e.touches[0]);
         }
       }, { passive: true });
     }
@@ -116,31 +179,7 @@ class DragonCursor {
       changeDirection();
       // Keep canvas behind text on mobile
       this.canvas.style.zIndex = '5';
-    }
-
-    // Send the dragon behind text/buttons and lower its opacity when hovering over interactive elements (desktop only)
-    if (!this.isMobile) {
-      document.addEventListener('mouseover', (e) => {
-        if (!e.target) return;
-        const isInteractive = e.target.closest('a, button, input, textarea, [role="button"], .project-card, .btn');
-        if (isInteractive) {
-          this.canvas.style.zIndex = '5'; // Below content wrappers (z-index: 10)
-          this.canvas.style.opacity = '0.2'; // Drop opacity
-        } else {
-          this.canvas.style.zIndex = '99999'; // Default top layer
-          this.canvas.style.opacity = '1.0'; // Full opacity
-        }
-      });
-    }
-
-    // Hide dragon when mouse leaves the window (desktop only)
-    if (!this.isMobile) {
-      window.addEventListener('mouseleave', () => {
-        this.canvas.style.opacity = '0';
-      });
-      window.addEventListener('mouseenter', () => {
-        this.canvas.style.opacity = '1.0';
-      });
+      this.canvas.style.opacity = '1.0';
     }
 
     window.addEventListener('resize', () => this.resizeCanvas());
